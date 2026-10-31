@@ -7,6 +7,7 @@ This branch introduces a small module layout while keeping `Ps4_v2.lua` as the e
 - `Ps4_v2.lua` — dashboard entry point and feature orchestration
 - `modules/Colors.lua` — color palette
 - `modules/Buttons.lua` — PlayStation face-button image IDs and tint setting
+- `modules/Icons.lua` — icon drawing primitives and image-backed face-button rendering
 - `modules/Sounds.lua` — sound asset IDs
 - `modules/Settings.lua` — default user settings
 - `modules/UIFactory.lua` — shared UI constructors
