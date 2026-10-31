@@ -28,13 +28,6 @@ if S.old then S.old:Destroy() end
 
 local COLORS = loadModule("Colors")
 S.SOUND_IDS = loadModule("Sounds")
-    Select = "rbxassetid://124400323975890",
-    Login = "rbxassetid://123072435492721",
-    Open = "rbxassetid://134203002406032",
-    Close = "rbxassetid://88440088035194",
-    Notify = "rbxassetid://84711905220990",
-    Home = "rbxassetid://126928354906604",
-}
 
 -- Key that hides / shows the whole dashboard (change it here)
 local TOGGLE_KEY = Enum.KeyCode.RightShift
@@ -190,10 +183,9 @@ D.keyless = function(px, bar)
 end
 
 -- the four face buttons are real images now (your asset ids)
-S.BUTTON_IMAGES = loadModule("Buttons").images
-S.BUTTON_TINT = loadModule("Buttons").tint
--- false = keep the artwork's own colours; true = tint it with the colour passed to S.icon
-S.BUTTON_TINT = false
+local buttonConfig = loadModule("Buttons")
+S.BUTTON_IMAGES = buttonConfig.images
+S.BUTTON_TINT = buttonConfig.tint
 
 -- S.icon(name, parent, pixelSize, color, position) draws an icon and returns its holder frame
 function S.icon(name, parent, size, color, pos)
