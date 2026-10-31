@@ -6,23 +6,28 @@ S.SoundService = game:GetService("SoundService")
 local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
+-- Modular component loader. Keep this file as the public entry point.
+local MODULE_BASE = "https://raw.githubusercontent.com/Dreamhacker-Fear/Here/feature/modular-ui/modules/"
+local function loadModule(name)
+    local response = game:HttpGet(MODULE_BASE .. name .. ".lua", true)
+    local chunk, compileError = loadstring(response)
+    if not chunk then error("PS4 module " .. name .. " failed to compile: " .. tostring(compileError), 0) end
+    local ok, result = pcall(chunk)
+    if not ok then error("PS4 module " .. name .. " failed: " .. tostring(result), 0) end
+    if type(result) ~= "table" and type(result) ~= "function" then
+        error("PS4 module " .. name .. " returned an invalid value", 0)
+    end
+    return result
+end
+
+
 S.playerGui = player:WaitForChild("PlayerGui")
 
 S.old = S.playerGui:FindFirstChild("PS4Dashboard")
 if S.old then S.old:Destroy() end
 
-local COLORS = {
-    white = Color3.fromRGB(255, 255, 255),
-    muted = Color3.fromRGB(165, 188, 220),
-    blue = Color3.fromRGB(0, 112, 209),
-    dark = Color3.fromRGB(6, 20, 48),
-    card = Color3.fromRGB(12, 34, 72),
-    line = Color3.fromRGB(76, 137, 220),
-    danger = Color3.fromRGB(140, 40, 40),
-    grey = Color3.fromRGB(70, 82, 125),
-}
-
-S.SOUND_IDS = {
+local COLORS = loadModule("Colors")
+S.SOUND_IDS = loadModule("Sounds")
     Select = "rbxassetid://124400323975890",
     Login = "rbxassetid://123072435492721",
     Open = "rbxassetid://134203002406032",
@@ -34,7 +39,7 @@ S.SOUND_IDS = {
 -- Key that hides / shows the whole dashboard (change it here)
 local TOGGLE_KEY = Enum.KeyCode.RightShift
 
-local settings = { sound = true, volume = 0.6, toasts = true, theme = 1, images = true, hideOnStart = true, uiscale = 1 }
+local settings = loadModule("Settings")
 local earned = {}
 local pageGradients, waves = {}, {}
 
@@ -54,96 +59,11 @@ local function playSound(name)
     end)
 end
 
-local function make(class, props, parent)
-    local o = Instance.new(class)
-    for k, v in pairs(props or {}) do o[k] = v end
-    o.Parent = parent
-    return o
-end
+local UIFactory = loadModule("UIFactory")(COLORS, TweenService)
+local make, round, circle, stroke, tween, label, button =
+    UIFactory.make, UIFactory.round, UIFactory.circle, UIFactory.stroke,
+    UIFactory.tween, UIFactory.label, UIFactory.button
 
-local function round(obj, r)
-    make("UICorner", { CornerRadius = UDim.new(0, r or 6) }, obj)
-end
-
-local function circle(obj)
-    make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, obj)
-end
-
-local function stroke(obj, color, thick, trans)
-    return make("UIStroke", {
-        Color = color or COLORS.white,
-        Thickness = thick or 1,
-        Transparency = trans or 0,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-    }, obj)
-end
-
-local function tween(obj, dur, goal, style, dir)
-    local t = TweenService:Create(obj,
-        TweenInfo.new(dur, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), goal)
-    t:Play()
-    return t
-end
-
-local function label(parent, text, size, pos, ts, color, bold)
-    return make("TextLabel", {
-        BackgroundTransparency = 1,
-        Text = text,
-        Size = size,
-        Position = pos,
-        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
-        TextSize = ts or 12,
-        TextColor3 = color or COLORS.white,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        TextWrapped = true,
-    }, parent)
-end
-
-local function button(parent, text, size, pos, color, ts)
-    local o = make("TextButton", {
-        Size = size,
-        Position = pos,
-        BackgroundColor3 = color or COLORS.card,
-        BorderSizePixel = 0,
-        Text = text,
-        TextColor3 = COLORS.white,
-        TextSize = ts or 12,
-        Font = Enum.Font.GothamMedium,
-        TextWrapped = true,
-        AutoButtonColor = true,
-    }, parent)
-    round(o, 5)
-    return o
-end
-
-local function makeCover(parent, class, color, text)
-    local c = make(class, { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, parent)
-    if class == "TextButton" then c.Text = ""; c.AutoButtonColor = false end
-    round(c, 4)
-    make("UIGradient", {
-        Rotation = 90,
-        Color = ColorSequence.new(
-            color:Lerp(Color3.new(1, 1, 1), 0.22),
-            color:Lerp(Color3.new(0, 0, 0), 0.4)
-        ),
-    }, c)
-    local art = make("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.fromScale(1, 1),
-        Text = text,
-        Font = Enum.Font.GothamBold,
-        TextColor3 = COLORS.white,
-        TextScaled = true,
-        TextWrapped = true,
-    }, c)
-    make("UIPadding", {
-        PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
-        PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
-    }, art)
-    make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 6 }, art)
-    return c
-end
 
 -- ===== PlayStation-style icons, drawn from simple shapes (no image files needed) =====
 S.iconDraw = {}
@@ -270,12 +190,8 @@ D.keyless = function(px, bar)
 end
 
 -- the four face buttons are real images now (your asset ids)
-S.BUTTON_IMAGES = {
-    cross = "rbxassetid://127359940243404",
-    circle = "rbxassetid://127127585833889",
-    square = "rbxassetid://95459535081564",
-    triangle = "rbxassetid://116013011869236",
-}
+S.BUTTON_IMAGES = loadModule("Buttons").images
+S.BUTTON_TINT = loadModule("Buttons").tint
 -- false = keep the artwork's own colours; true = tint it with the colour passed to S.icon
 S.BUTTON_TINT = false
 
@@ -6460,11 +6376,11 @@ S.NEWS = {
     cooldown = 30, -- seconds between posts
     cats = {
         { name = "Release",    color = Color3.fromRGB(46, 160, 90),  embed = 0x2EA05A,
-          hook = "https://discord.com/api/webhooks/1565736121827336382/FbSiBz9Nh3NvaU9x--04V6Li2GJ7lSSXUrXkZFB4Q76vF4NAnC_8g1fjoh7IjdLue9Mz" },
+          hook = nil -- configure only through a private server, never in this public client script },
         { name = "Showcase",   color = Color3.fromRGB(150, 80, 210), embed = 0x9650D2,
-          hook = "https://discord.com/api/webhooks/1565736272738263111/8Zs_hJe0Z_zVxXCbGgzfs7uyNwntDqNC0MuxADR4EovVMaTbI3_zIzxCIk_R1XlBKmZK" },
+          hook = nil -- configure only through a private server, never in this public client script },
         { name = "Bug Report", color = Color3.fromRGB(200, 70, 70),  embed = 0xC84646,
-          hook = "https://discord.com/api/webhooks/1565737750697869462/6RFwKz_FAEoWL9uwQEuK1X5z55TPd5EZ5hNbW0kxHFLccgmTDvDd14ZigksVT-7-bDt7" },
+          hook = nil -- configure only through a private server, never in this public client script },
     },
 }
 S.newsSel, S.newsNext, S.newsBusy = 1, 0, false
@@ -6533,6 +6449,7 @@ end
 function S.sendNews()
     if S.newsBusy then return end
     local cat = S.NEWS.cats[S.newsSel]
+    if not cat.hook then notify("Discord posting is disabled until a private server endpoint is configured."); return end
     local title = S.newsTitle.Text:match("^%s*(.-)%s*$")
     local body = S.newsBody.Text:match("^%s*(.-)%s*$")
     if title == "" then notify("Add a title first") return end
