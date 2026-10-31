@@ -7,7 +7,7 @@ local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 -- Modular component loader. Keep this file as the public entry point.
-local MODULE_BASE = "https://raw.githubusercontent.com/Dreamhacker-Fear/Here/refs/heads/feature/modular-ui/modules/"
+local MODULE_BASE = "https://raw.githubusercontent.com/Dreamhacker-Fear/Here/d85915bea3b82a9097d3a46e668f804f8e816068/modules/"
 local function loadModule(name)
     local response = game:HttpGet(MODULE_BASE .. name .. ".lua", true)
     local chunk, compileError = loadstring(response)
