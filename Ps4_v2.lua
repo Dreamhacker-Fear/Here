@@ -6,35 +6,33 @@ S.SoundService = game:GetService("SoundService")
 local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
+-- Modular component loader. Keep this file as the public entry point.
+local MODULE_BASE = "https://raw.githubusercontent.com/Dreamhacker-Fear/Here/d85915bea3b82a9097d3a46e668f804f8e816068/modules/"
+local function loadModule(name)
+    local response = game:HttpGet(MODULE_BASE .. name .. ".lua", true)
+    local chunk, compileError = loadstring(response)
+    if not chunk then error("PS4 module " .. name .. " failed to compile: " .. tostring(compileError), 0) end
+    local ok, result = pcall(chunk)
+    if not ok then error("PS4 module " .. name .. " failed: " .. tostring(result), 0) end
+    if type(result) ~= "table" and type(result) ~= "function" then
+        error("PS4 module " .. name .. " returned an invalid value", 0)
+    end
+    return result
+end
+
+
 S.playerGui = player:WaitForChild("PlayerGui")
 
 S.old = S.playerGui:FindFirstChild("PS4Dashboard")
 if S.old then S.old:Destroy() end
 
-local COLORS = {
-    white = Color3.fromRGB(255, 255, 255),
-    muted = Color3.fromRGB(165, 188, 220),
-    blue = Color3.fromRGB(0, 112, 209),
-    dark = Color3.fromRGB(6, 20, 48),
-    card = Color3.fromRGB(12, 34, 72),
-    line = Color3.fromRGB(76, 137, 220),
-    danger = Color3.fromRGB(140, 40, 40),
-    grey = Color3.fromRGB(70, 82, 125),
-}
-
-S.SOUND_IDS = {
-    Select = "rbxassetid://124400323975890",
-    Login = "rbxassetid://123072435492721",
-    Open = "rbxassetid://134203002406032",
-    Close = "rbxassetid://88440088035194",
-    Notify = "rbxassetid://84711905220990",
-    Home = "rbxassetid://126928354906604",
-}
+local COLORS = loadModule("Colors")
+S.SOUND_IDS = loadModule("Sounds")
 
 -- Key that hides / shows the whole dashboard (change it here)
 local TOGGLE_KEY = Enum.KeyCode.RightShift
 
-local settings = { sound = true, volume = 0.6, toasts = true, theme = 1, images = true, hideOnStart = true, uiscale = 1 }
+local settings = loadModule("Settings")
 local earned = {}
 local pageGradients, waves = {}, {}
 
@@ -54,291 +52,14 @@ local function playSound(name)
     end)
 end
 
-local function make(class, props, parent)
-    local o = Instance.new(class)
-    for k, v in pairs(props or {}) do o[k] = v end
-    o.Parent = parent
-    return o
-end
+local UIFactory = loadModule("UIFactory")(COLORS, TweenService)
+local make, round, circle, stroke, tween, label, button =
+    UIFactory.make, UIFactory.round, UIFactory.circle, UIFactory.stroke,
+    UIFactory.tween, UIFactory.label, UIFactory.button
 
-local function round(obj, r)
-    make("UICorner", { CornerRadius = UDim.new(0, r or 6) }, obj)
-end
 
-local function circle(obj)
-    make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, obj)
-end
-
-local function stroke(obj, color, thick, trans)
-    return make("UIStroke", {
-        Color = color or COLORS.white,
-        Thickness = thick or 1,
-        Transparency = trans or 0,
-        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-    }, obj)
-end
-
-local function tween(obj, dur, goal, style, dir)
-    local t = TweenService:Create(obj,
-        TweenInfo.new(dur, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), goal)
-    t:Play()
-    return t
-end
-
-local function label(parent, text, size, pos, ts, color, bold)
-    return make("TextLabel", {
-        BackgroundTransparency = 1,
-        Text = text,
-        Size = size,
-        Position = pos,
-        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
-        TextSize = ts or 12,
-        TextColor3 = color or COLORS.white,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        TextWrapped = true,
-    }, parent)
-end
-
-local function button(parent, text, size, pos, color, ts)
-    local o = make("TextButton", {
-        Size = size,
-        Position = pos,
-        BackgroundColor3 = color or COLORS.card,
-        BorderSizePixel = 0,
-        Text = text,
-        TextColor3 = COLORS.white,
-        TextSize = ts or 12,
-        Font = Enum.Font.GothamMedium,
-        TextWrapped = true,
-        AutoButtonColor = true,
-    }, parent)
-    round(o, 5)
-    return o
-end
-
-local function makeCover(parent, class, color, text)
-    local c = make(class, { BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0 }, parent)
-    if class == "TextButton" then c.Text = ""; c.AutoButtonColor = false end
-    round(c, 4)
-    make("UIGradient", {
-        Rotation = 90,
-        Color = ColorSequence.new(
-            color:Lerp(Color3.new(1, 1, 1), 0.22),
-            color:Lerp(Color3.new(0, 0, 0), 0.4)
-        ),
-    }, c)
-    local art = make("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.fromScale(1, 1),
-        Text = text,
-        Font = Enum.Font.GothamBold,
-        TextColor3 = COLORS.white,
-        TextScaled = true,
-        TextWrapped = true,
-    }, c)
-    make("UIPadding", {
-        PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
-        PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
-    }, art)
-    make("UITextSizeConstraint", { MaxTextSize = 18, MinTextSize = 6 }, art)
-    return c
-end
-
--- ===== PlayStation-style icons, drawn from simple shapes (no image files needed) =====
-S.iconDraw = {}
-local D = S.iconDraw
-D.cross = function(px, bar) bar(0.5, 0.5, 1.1, 45); bar(0.5, 0.5, 1.1, -45) end -- 1.1 = same width as the circle
-D.circle = function(px) px(0.5, 0.5, 0.8, 0.8, { r = 0.5 }) end
-D.square = function(px) px(0.5, 0.5, 0.7, 0.7, { r = 0.08 }) end
-D.triangle = function(px, bar) bar(0.3, 0.5, 0.8, -60); bar(0.7, 0.5, 0.8, 60); bar(0.5, 0.84, 0.8, 0) end
-D.options = function(px, bar) bar(0.5, 0.28, 0.7, 0); bar(0.5, 0.5, 0.7, 0); bar(0.5, 0.72, 0.7, 0) end
-D.minus = function(px, bar) bar(0.5, 0.5, 0.6, 0) end
-D.friends = function(px, bar, dot)
-    dot(0.36, 0.3, 0.26); px(0.36, 0.7, 0.46, 0.28, { fill = true, r = 0.5 })
-    dot(0.72, 0.38, 0.2); px(0.72, 0.72, 0.3, 0.2, { fill = true, r = 0.5 })
-end
-D.person = function(px, bar, dot)
-    dot(0.5, 0.32, 0.32); px(0.5, 0.74, 0.6, 0.34, { fill = true, r = 0.5 })
-end
-D.party = function(px, bar, dot)
-    px(0.5, 0.42, 0.8, 0.55, { r = 0.3 }); px(0.3, 0.78, 0.14, 0.14, { fill = true, rot = 45 })
-    dot(0.32, 0.42, 0.1); dot(0.5, 0.42, 0.1); dot(0.68, 0.42, 0.1)
-end
-D.messages = function(px, bar)
-    px(0.5, 0.5, 0.82, 0.6, { r = 0.1 }); bar(0.3, 0.37, 0.5, 38); bar(0.7, 0.37, 0.5, -38)
-end
-D.bell = function(px, bar, dot)
-    px(0.5, 0.36, 0.5, 0.5, { fill = true, r = 0.5 }); px(0.5, 0.52, 0.5, 0.28, { fill = true })
-    px(0.5, 0.66, 0.74, 0.16, { fill = true, r = 0.5 }); dot(0.5, 0.84, 0.14); dot(0.5, 0.1, 0.1)
-end
-D.trophy = function(px)
-    px(0.5, 0.26, 0.44, 0.22, { fill = true }); px(0.5, 0.4, 0.44, 0.3, { fill = true, r = 0.5 })
-    px(0.2, 0.32, 0.2, 0.2, { r = 0.5 }); px(0.8, 0.32, 0.2, 0.2, { r = 0.5 })
-    px(0.5, 0.62, 0.1, 0.18, { fill = true }); px(0.5, 0.78, 0.4, 0.08, { fill = true, r = 0.4 })
-end
-D.gear = function(px, bar, dot, ts, th)
-    px(0.5, 0.5, 0.52, 0.52, { r = 0.5, th = th * 1.5 })
-    for i = 0, 7 do
-        local a = math.rad(i * 45)
-        px(0.5 + 0.34 * math.cos(a), 0.5 + 0.34 * math.sin(a), 0.15, 0.15, { fill = true, rot = i * 45 })
-    end
-end
-D.power = function(px, bar, dot, ts)
-    for k = 0, 27 do
-        local a = math.rad(35 + k * (290 / 27))
-        dot(0.5 + 0.3 * math.sin(a), 0.56 - 0.3 * math.cos(a), math.max(0.09, ts * 1.1))
-    end
-    bar(0.5, 0.3, 0.36, 90)
-end
-D.refresh = function(px, bar, dot, ts)
-    for k = 0, 24 do
-        local a = math.rad(40 + k * (290 / 24))
-        dot(0.5 + 0.3 * math.sin(a), 0.5 - 0.3 * math.cos(a), math.max(0.09, ts * 1.1))
-    end
-    bar(0.63, 0.18, 0.22, 8); bar(0.74, 0.28, 0.22, 80)
-end
-D.download = function(px, bar)
-    bar(0.5, 0.4, 0.42, 90); bar(0.4, 0.58, 0.28, 45); bar(0.6, 0.58, 0.28, -45); bar(0.5, 0.84, 0.6, 0)
-end
-D.play = function(px, bar) bar(0.28, 0.5, 0.7, 90); bar(0.54, 0.32, 0.62, 34); bar(0.54, 0.68, 0.62, -34) end
-D.pause = function(px, bar) bar(0.36, 0.5, 0.6, 90); bar(0.64, 0.5, 0.6, 90) end
-D.trash = function(px, bar)
-    bar(0.5, 0.24, 0.62, 0); bar(0.5, 0.15, 0.22, 0); px(0.5, 0.58, 0.5, 0.52, { r = 0.1 })
-    bar(0.4, 0.58, 0.3, 90); bar(0.6, 0.58, 0.3, 90)
-end
-D.edit = function(px, bar) px(0.55, 0.45, 0.18, 0.66, { fill = true, r = 0.3, rot = 45 }); bar(0.4, 0.86, 0.5, 0) end
-D.info = function(px, bar, dot)
-    px(0.5, 0.5, 0.82, 0.82, { r = 0.5 }); dot(0.5, 0.3, 0.1); bar(0.5, 0.6, 0.3, 90)
-end
-D.copy = function(px) px(0.38, 0.38, 0.46, 0.46, { r = 0.1 }); px(0.6, 0.6, 0.46, 0.46, { r = 0.1 }) end
-D.crown = function(px, bar, dot)
-    px(0.5, 0.78, 0.74, 0.14, { fill = true, r = 0.2 })
-    px(0.24, 0.5, 0.14, 0.34, { fill = true }); px(0.5, 0.4, 0.14, 0.5, { fill = true }); px(0.76, 0.5, 0.14, 0.34, { fill = true })
-    dot(0.24, 0.3, 0.14); dot(0.5, 0.18, 0.14); dot(0.76, 0.3, 0.14)
-end
-D.check = function(px, bar) bar(0.36, 0.62, 0.32, 45); bar(0.6, 0.5, 0.62, -50) end
-D.store = function(px) px(0.5, 0.62, 0.66, 0.5, { r = 0.1 }); px(0.5, 0.3, 0.28, 0.28, { r = 0.5 }) end
-D.library = function(px)
-    px(0.3, 0.3, 0.28, 0.28, { r = 0.1 }); px(0.7, 0.3, 0.28, 0.28, { r = 0.1 })
-    px(0.3, 0.7, 0.28, 0.28, { r = 0.1 }); px(0.7, 0.7, 0.28, 0.28, { r = 0.1 })
-end
-D.sound = function(px, bar)
-    px(0.24, 0.5, 0.14, 0.22, { fill = true, r = 0.1 }); px(0.38, 0.5, 0.24, 0.24, { fill = true, rot = 45 })
-    bar(0.7, 0.34, 0.2, -40); bar(0.74, 0.5, 0.2, 0); bar(0.7, 0.66, 0.2, 40)
-end
-D.theme = function(px, bar, dot)
-    px(0.5, 0.5, 0.8, 0.8, { r = 0.5 }); dot(0.34, 0.4, 0.12); dot(0.5, 0.3, 0.12); dot(0.66, 0.4, 0.12); dot(0.62, 0.62, 0.12)
-end
-D.disk = function(px) px(0.5, 0.25, 0.7, 0.2, { r = 0.5 }); px(0.5, 0.5, 0.7, 0.2, { r = 0.5 }); px(0.5, 0.75, 0.7, 0.2, { r = 0.5 }) end
-D.image = function(px, bar, dot)
-    px(0.5, 0.5, 0.82, 0.62, { r = 0.1 }); dot(0.34, 0.38, 0.14); bar(0.62, 0.62, 0.34, -40)
-end
-D.network = function(px, bar) px(0.5, 0.5, 0.8, 0.8, { r = 0.5 }); px(0.5, 0.5, 0.36, 0.8, { r = 0.5 }); bar(0.5, 0.5, 0.8, 0) end
-D.monitor = function(px, bar)
-    px(0.5, 0.42, 0.8, 0.5, { r = 0.1 }); px(0.5, 0.72, 0.1, 0.12, { fill = true }); bar(0.5, 0.86, 0.4, 0)
-end
-
-D.key = function(px, bar)
-    px(0.26, 0.5, 0.34, 0.34, { r = 0.5 })
-    bar(0.6, 0.5, 0.46, 0)
-    bar(0.74, 0.64, 0.16, 90)
-    bar(0.88, 0.64, 0.16, 90)
-end
-D.lock = function(px, bar)
-    bar(0.5, 0.14, 0.46, 0)
-    bar(0.27, 0.28, 0.28, 90)
-    bar(0.73, 0.28, 0.28, 90)
-    px(0.5, 0.68, 0.74, 0.44, { fill = true, r = 0.12 })
-end
-D.unlock = function(px, bar)
-    bar(0.58, 0.08, 0.46, 0)
-    bar(0.81, 0.2, 0.24, 90)
-    bar(0.35, 0.14, 0.12, 90)
-    px(0.5, 0.68, 0.74, 0.44, { fill = true, r = 0.12 })
-end
-D.search = function(px, bar)
-    px(0.42, 0.42, 0.55, 0.55, { r = 0.5 })
-    bar(0.8, 0.8, 0.32, 45)
-end
-D.keyless = function(px, bar)
-    px(0.26, 0.5, 0.34, 0.34, { r = 0.5 })
-    bar(0.6, 0.5, 0.46, 0)
-    bar(0.74, 0.64, 0.16, 90)
-    bar(0.88, 0.64, 0.16, 90)
-    bar(0.5, 0.5, 1.0, -45)
-end
-
--- the four face buttons are real images now (your asset ids)
-S.BUTTON_IMAGES = {
-    cross = "rbxassetid://127359940243404",
-    circle = "rbxassetid://127127585833889",
-    square = "rbxassetid://95459535081564",
-    triangle = "rbxassetid://116013011869236",
-}
--- false = keep the artwork's own colours; true = tint it with the colour passed to S.icon
-S.BUTTON_TINT = false
-
--- S.icon(name, parent, pixelSize, color, position) draws an icon and returns its holder frame
-function S.icon(name, parent, size, color, pos)
-    color = color or COLORS.white
-    local box = make("Frame", {
-        Name = "Icon_" .. tostring(name),
-        Size = UDim2.fromOffset(size, size),
-        Position = pos or UDim2.fromOffset(0, 0),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ZIndex = (parent.ZIndex or 1) + 1,
-    }, parent)
-    local imgId = S.BUTTON_IMAGES[name]
-    if imgId then
-        make("ImageLabel", {
-            Name = "Art", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1),
-            Image = imgId, ImageColor3 = S.BUTTON_TINT and color or Color3.new(1, 1, 1),
-            ScaleType = Enum.ScaleType.Fit, ZIndex = box.ZIndex,
-        }, box)
-        return box
-    end
-    local th = math.max(1.5, size * 0.085)
-    local function px(cx, cy, w, h, o)
-        o = o or {}
-        local f = make("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(cx, cy),
-            Size = UDim2.fromScale(w, h),
-            Rotation = o.rot or 0,
-            BackgroundColor3 = color,
-            BackgroundTransparency = o.fill and 0 or 1,
-            BorderSizePixel = 0,
-            ZIndex = box.ZIndex,
-        }, box)
-        if o.r then make("UICorner", { CornerRadius = UDim.new(o.r, 0) }, f) end
-        if not o.fill then
-            make("UIStroke", {
-                Color = color, Thickness = o.th or th,
-                ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-            }, f)
-        end
-        return f
-    end
-    local function bar(cx, cy, len, rot)
-        local f = make("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(cx, cy),
-            Size = UDim2.new(len, 0, 0, th),
-            Rotation = rot or 0,
-            BackgroundColor3 = color,
-            BorderSizePixel = 0,
-            ZIndex = box.ZIndex,
-        }, box)
-        make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, f)
-        return f
-    end
-    local function dot(cx, cy, d) return px(cx, cy, d, d, { fill = true, r = 0.5 }) end
-    local draw = S.iconDraw[name]
-    if draw then draw(px, bar, dot, th / size, th) end
-    return box
-end
+local buttonConfig = loadModule("Buttons")
+loadModule("Icons")(S, make, COLORS, buttonConfig)
 
 -- picks an icon for a menu entry from its text (nil = no icon)
 function S.iconForText(t)
@@ -6460,11 +6181,11 @@ S.NEWS = {
     cooldown = 30, -- seconds between posts
     cats = {
         { name = "Release",    color = Color3.fromRGB(46, 160, 90),  embed = 0x2EA05A,
-          hook = "https://discord.com/api/webhooks/1565736121827336382/FbSiBz9Nh3NvaU9x--04V6Li2GJ7lSSXUrXkZFB4Q76vF4NAnC_8g1fjoh7IjdLue9Mz" },
+          hook = nil -- configure only through a private server, never in this public client script },
         { name = "Showcase",   color = Color3.fromRGB(150, 80, 210), embed = 0x9650D2,
-          hook = "https://discord.com/api/webhooks/1565736272738263111/8Zs_hJe0Z_zVxXCbGgzfs7uyNwntDqNC0MuxADR4EovVMaTbI3_zIzxCIk_R1XlBKmZK" },
+          hook = nil -- configure only through a private server, never in this public client script },
         { name = "Bug Report", color = Color3.fromRGB(200, 70, 70),  embed = 0xC84646,
-          hook = "https://discord.com/api/webhooks/1565737750697869462/6RFwKz_FAEoWL9uwQEuK1X5z55TPd5EZ5hNbW0kxHFLccgmTDvDd14ZigksVT-7-bDt7" },
+          hook = nil -- configure only through a private server, never in this public client script },
     },
 }
 S.newsSel, S.newsNext, S.newsBusy = 1, 0, false
@@ -6533,6 +6254,7 @@ end
 function S.sendNews()
     if S.newsBusy then return end
     local cat = S.NEWS.cats[S.newsSel]
+    if not cat.hook then notify("Discord posting is disabled until a private server endpoint is configured."); return end
     local title = S.newsTitle.Text:match("^%s*(.-)%s*$")
     local body = S.newsBody.Text:match("^%s*(.-)%s*$")
     if title == "" then notify("Add a title first") return end
